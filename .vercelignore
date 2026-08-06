@@ -1,0 +1,11 @@
+.venv/
+.git/
+__pycache__/
+*.py[cod]
+*.xlsx
+*.xls
+*.csv
+*.zip
+launcher.py
+웹앱_실행.bat
+사용방법.txt

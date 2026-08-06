@@ -1,0 +1,11 @@
+.venv/
+.vercel/
+__pycache__/
+*.py[cod]
+*.xlsx
+*.xls
+*.csv
+*.zip
+.env
+.env.*
+!.env.example
