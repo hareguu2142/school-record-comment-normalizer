@@ -7,57 +7,33 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <main class="page-shell">
-    <section class="hero" aria-labelledby="page-title">
-      <div class="eyebrow"><span></span> 생활기록부 업무 도구</div>
-      <h1 id="page-title">복잡한 조회 파일을<br><em>깔끔한 학생별 표</em>로</h1>
-      <p class="intro">학교생활기록부 조회 화면에서 내려받은 엑셀을 올리면 반복 머리글과 쪽번호를 제거하고, 페이지 사이에서 잘린 기록까지 이어 붙입니다.</p>
+  <main>
+    <header>
+      <h1>학생부 기록 정리</h1>
+      <p>조회형 엑셀을 학생별 표로 변환합니다.</p>
+    </header>
 
-      <div class="process" aria-label="처리 과정">
-        <div><b>1</b><span>파일 선택</span></div>
-        <i></i>
-        <div><b>2</b><span>자동 정리</span></div>
-        <i></i>
-        <div><b>3</b><span>결과 저장</span></div>
-      </div>
-    </section>
+    <form id="upload-form">
+      <label class="drop-zone" id="drop-zone" for="file-input">
+        <input id="file-input" name="file" type="file" accept=".xlsx" multiple required>
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M7 3.75h6.5L18 8.25v12H7zM13.5 3.75v4.5H18M10 12h5M10 15h5"/>
+        </svg>
+        <strong>엑셀 파일 선택</strong>
+        <span>여러 파일을 한 번에 선택할 수 있습니다.</span>
+      </label>
 
-    <section class="card" aria-labelledby="upload-title">
-      <div class="card-heading">
-        <div>
-          <span class="step-label">STEP 01</span>
-          <h2 id="upload-title">엑셀 파일을 선택하세요</h2>
-        </div>
-        <span class="local-badge">파일을 저장하지 않음</span>
-      </div>
+      <div id="file-summary" class="file-summary" hidden></div>
+      <ul id="file-list" class="file-list"></ul>
 
-      <form id="upload-form">
-        <label class="drop-zone" id="drop-zone" for="file-input">
-          <input id="file-input" name="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-          <span class="file-icon" aria-hidden="true">
-            <svg viewBox="0 0 48 48"><path d="M14 5h14l8 8v28H14z"/><path d="M28 5v9h8M20 23h10M20 29h10M20 35h7"/></svg>
-          </span>
-          <strong id="drop-title">파일을 여기에 끌어다 놓으세요</strong>
-          <span id="file-name">또는 클릭하여 .xlsx 파일 선택</span>
-          <small>최대 4MB · 원본 파일은 변경하지 않습니다</small>
-        </label>
+      <button id="convert-button" type="submit" disabled>
+        <span class="button-text">파일 정리하기</span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
+    </form>
 
-        <button id="convert-button" type="submit" disabled>
-          <span class="button-text">정리된 엑셀 만들기</span>
-          <span class="spinner" aria-hidden="true"></span>
-        </button>
-      </form>
-
-      <div id="status" class="status" role="status" aria-live="polite"></div>
-    </section>
-
-    <section class="features" aria-label="정리 항목">
-      <article><span>01</span><h3>반복 요소 제거</h3><p>제목, 학급, 머리글, 쪽번호와 안내 행을 제외합니다.</p></article>
-      <article><span>02</span><h3>누락값 자동 채움</h3><p>생략된 과목·학년·학기를 앞선 데이터로 복원합니다.</p></article>
-      <article><span>03</span><h3>분할 문장 연결</h3><p>페이지 경계에서 나뉜 동일 학생 기록을 정확히 합칩니다.</p></article>
-    </section>
-
-    <footer>업로드 파일은 변환 응답 생성에만 사용되며 애플리케이션에서 영구 저장하지 않습니다.</footer>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <footer>파일당 최대 4MB · 결과는 각각 다운로드됩니다.</footer>
   </main>
 
   <script>
@@ -65,27 +41,92 @@
     const input = document.getElementById('file-input');
     const zone = document.getElementById('drop-zone');
     const button = document.getElementById('convert-button');
-    const fileName = document.getElementById('file-name');
-    const dropTitle = document.getElementById('drop-title');
+    const buttonText = button.querySelector('.button-text');
+    const fileSummary = document.getElementById('file-summary');
+    const fileList = document.getElementById('file-list');
     const status = document.getElementById('status');
+    let selectedFiles = [];
 
-    function setFile(file) {
-      if (!file) return;
-      const transfer = new DataTransfer();
-      transfer.items.add(file);
-      input.files = transfer.files;
-      const size = file.size < 1024 * 1024
-        ? `${Math.max(1, Math.round(file.size / 1024))}KB`
-        : `${(file.size / 1024 / 1024).toFixed(1)}MB`;
-      fileName.textContent = `${file.name} · ${size}`;
-      dropTitle.textContent = '선택한 파일';
-      zone.classList.add('has-file');
-      button.disabled = false;
+    function sizeLabel(bytes) {
+      return bytes < 1024 * 1024
+        ? `${Math.max(1, Math.round(bytes / 1024))}KB`
+        : `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+    }
+
+    function showStatus(type, message) {
+      status.className = `status ${type}`;
+      status.textContent = message;
+    }
+
+    function setFiles(fileCollection) {
+      const files = Array.from(fileCollection);
+      const invalid = files.find(file => !file.name.toLowerCase().endsWith('.xlsx'));
+      const oversized = files.find(file => file.size > 4 * 1024 * 1024);
+
+      if (invalid) {
+        selectedFiles = [];
+        renderFiles();
+        showStatus('error', '.xlsx 파일만 선택할 수 있습니다.');
+        return;
+      }
+      if (oversized) {
+        selectedFiles = [];
+        renderFiles();
+        showStatus('error', '각 파일은 4MB 이하여야 합니다.');
+        return;
+      }
+
+      selectedFiles = files;
+      renderFiles();
       status.className = 'status';
       status.textContent = '';
     }
 
-    input.addEventListener('change', () => setFile(input.files[0]));
+    function renderFiles() {
+      fileList.replaceChildren();
+      const hasFiles = selectedFiles.length > 0;
+      fileSummary.hidden = !hasFiles;
+      fileSummary.textContent = hasFiles ? `${selectedFiles.length}개 파일 선택됨` : '';
+
+      for (const file of selectedFiles) {
+        const item = document.createElement('li');
+        const name = document.createElement('span');
+        const size = document.createElement('small');
+        name.textContent = file.name;
+        size.textContent = sizeLabel(file.size);
+        item.append(name, size);
+        fileList.append(item);
+      }
+
+      button.disabled = !hasFiles;
+      buttonText.textContent = hasFiles ? `${selectedFiles.length}개 파일 정리하기` : '파일 정리하기';
+      zone.classList.toggle('has-files', hasFiles);
+    }
+
+    async function convertFile(file) {
+      const body = new FormData();
+      body.append('file', file);
+      const response = await fetch('/convert', { method: 'POST', body });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || '파일을 처리하지 못했습니다.');
+      }
+
+      const blob = await response.blob();
+      const downloadName = decodeURIComponent(
+        response.headers.get('X-Download-Name') || `${file.name.replace(/\.xlsx$/i, '')}_정리.xlsx`
+      );
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = downloadName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 2000);
+    }
+
+    input.addEventListener('change', () => setFiles(input.files));
     ['dragenter', 'dragover'].forEach(name => zone.addEventListener(name, event => {
       event.preventDefault();
       zone.classList.add('dragging');
@@ -94,45 +135,32 @@
       event.preventDefault();
       zone.classList.remove('dragging');
     }));
-    zone.addEventListener('drop', event => setFile(event.dataTransfer.files[0]));
+    zone.addEventListener('drop', event => setFiles(event.dataTransfer.files));
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
-      if (!input.files.length) return;
-      button.classList.add('loading');
+      if (!selectedFiles.length) return;
+
       button.disabled = true;
-      status.className = 'status working';
-      status.textContent = '파일을 분석하고 정리하고 있습니다…';
+      button.classList.add('loading');
+      const failures = [];
 
-      try {
-        const body = new FormData();
-        body.append('file', input.files[0]);
-        const response = await fetch('/convert', { method: 'POST', body });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload.error || '파일을 처리하지 못했습니다.');
+      for (let index = 0; index < selectedFiles.length; index += 1) {
+        const file = selectedFiles[index];
+        showStatus('working', `${index + 1}/${selectedFiles.length} 처리 중 · ${file.name}`);
+        try {
+          await convertFile(file);
+        } catch (error) {
+          failures.push(`${file.name}: ${error.message}`);
         }
+      }
 
-        const blob = await response.blob();
-        const downloadName = decodeURIComponent(response.headers.get('X-Download-Name') || '학생부_정리.xlsx');
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = downloadName;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-
-        const records = response.headers.get('X-Record-Count');
-        const merged = response.headers.get('X-Merged-Count');
-        status.className = 'status success';
-        status.innerHTML = `<b>정리가 완료되었습니다.</b> ${records}개 기록을 만들고, 페이지 분할 ${merged}개를 연결했습니다.`;
-      } catch (error) {
-        status.className = 'status error';
-        status.textContent = error.message;
-      } finally {
-        button.classList.remove('loading');
-        button.disabled = false;
+      button.classList.remove('loading');
+      button.disabled = false;
+      if (failures.length) {
+        showStatus('error', `${selectedFiles.length - failures.length}개 완료 · ${failures.length}개 실패`);
+      } else {
+        showStatus('success', `${selectedFiles.length}개 파일을 모두 정리했습니다.`);
       }
     });
   </script>
