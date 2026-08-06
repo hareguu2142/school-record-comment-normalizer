@@ -2,6 +2,8 @@
 
 학교생활기록부 조회 화면에서 내려받은 인쇄 보고서형 `.xlsx` 파일을 학생별·과목별 표로 정규화하는 Flask 웹앱입니다.
 
+**웹앱:** https://school-record-comment-normalizer.vercel.app
+
 ## 기능
 
 - 반복되는 제목, 학급, 열 머리글, 페이지 번호, 학교명 제거
